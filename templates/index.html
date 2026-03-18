@@ -119,6 +119,22 @@
             font-weight: 700;
             color: var(--accent);
         }
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 3px;
+            margin-top: 8px;
+            overflow: hidden;
+            display: none;
+        }
+        .progress-bar.active { display: block; }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            width: 0%;
+            transition: width 0.1s linear;
+        }
         
         .sidebar {
             width: 260px;
@@ -217,6 +233,9 @@
                 <div class="action-badge">
                     <div class="label">Detected</div>
                     <div class="action" id="gestureName">WAITING...</div>
+                    <div class="progress-bar" id="screenshotProgress">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -238,9 +257,9 @@
                 <div class="gest-item" data-action="LEFT CLICK"><span>🖕 Middle</span><span>Left Click</span></div>
                 <div class="gest-item" data-action="RIGHT CLICK"><span>✌️🖕</span><span>Right Click</span></div>
                 <div class="gest-item" data-action="DOUBLE CLICK"><span>✌️🖕🫱</span><span>Double Click</span></div>
+                <div class="gest-item" data-action="SCREENSHOT"><span>🤏 Pinch</span><span>Screenshot</span></div>
                 <div class="gest-item" data-action="VOLUME UP"><span>🖐️ All 4</span><span>Volume Up</span></div>
                 <div class="gest-item" data-action="VOLUME DOWN"><span>👈 Pinky</span><span>Volume Down</span></div>
-                <div class="gest-item" data-action="MUTE"><span>🖕✌️👈</span><span>Mute</span></div>
             </div>
         </div>
     </main>
@@ -249,6 +268,8 @@
         const gestureName = document.getElementById('gestureName');
         const gestureItems = document.querySelectorAll('.gest-item');
         const mouseBtn = document.getElementById('mouseBtn');
+        const progressBar = document.getElementById('screenshotProgress');
+        const progressFill = document.getElementById('progressFill');
         let mouseEnabled = false;
         
         const labels = {
@@ -256,6 +277,7 @@
             'LEFT CLICK': 'Left Click',
             'RIGHT CLICK': 'Right Click',
             'DOUBLE CLICK': 'Double Click',
+            'SCREENSHOT': 'Screenshot',
             'VOLUME UP': 'Volume Up',
             'VOLUME DOWN': 'Volume Down',
             'MUTE': 'Mute'
@@ -272,6 +294,17 @@
                     } else {
                         gestureName.textContent = 'WAITING...';
                         clear();
+                    }
+                });
+            fetch('/get_screenshot_status')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.holding) {
+                        progressBar.classList.add('active');
+                        progressFill.style.width = (data.progress * 100) + '%';
+                    } else {
+                        progressBar.classList.remove('active');
+                        progressFill.style.width = '0%';
                     }
                 });
         }

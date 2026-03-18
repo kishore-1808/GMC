@@ -47,6 +47,8 @@ click_cooldown = 0.2
 last_click_time = 0
 screenshot_cooldown = 2.0
 last_screenshot_time = 0
+screenshot_hold_start = None
+screenshot_hold_duration = 1.0
 
 smooth_x, smooth_y = screen_width // 2, screen_height // 2
 smoothing = 0.25
@@ -61,6 +63,7 @@ last_action_time = 0
 
 current_action = "NONE"
 mouse_control_enabled = False
+screenshot_hold_start = None
 
 def smooth_move(new_x, new_y):
     global smooth_x, smooth_y, position_history
@@ -104,11 +107,30 @@ def volume_control(action):
         return True
     return False
 
+def take_screenshot():
+    global last_screenshot_time
+    current_time = time.time()
+    if current_time - last_screenshot_time > screenshot_cooldown:
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        filename = f"screenshot_{timestamp}.png"
+        filepath = os.path.join(screenshot_folder, filename)
+        pyautogui.screenshot(filepath)
+        last_screenshot_time = current_time
+        return True
+    return False
+
+def check_pinching(landmarks, threshold=0.05):
+    index_tip = landmarks[8]
+    thumb_tip = landmarks[4]
+    distance = ((index_tip.x - thumb_tip.x)**2 + (index_tip.y - thumb_tip.y)**2)**0.5
+    return distance < threshold
+
 def process_gestures(landmarks, frame):
-    global current_action, last_action_time
+    global current_action, last_action_time, screenshot_hold_start
     
     if not landmarks:
         current_action = "NONE"
+        screenshot_hold_start = None
         return None
     
     current_time = time.time()
@@ -119,6 +141,23 @@ def process_gestures(landmarks, frame):
     pinky_up = check_finger_up(landmarks, 20, 18)
     
     action = None
+    
+    is_pinching = check_pinching(landmarks)
+    
+    if is_pinching:
+        if screenshot_hold_start is None:
+            screenshot_hold_start = current_time
+        elif current_time - screenshot_hold_start >= screenshot_hold_duration:
+            if take_screenshot():
+                action = "SCREENSHOT"
+                screenshot_hold_start = None
+            else:
+                action = "SCREENSHOT"
+    else:
+        screenshot_hold_start = None
+    
+    if screenshot_hold_start is not None and action is None:
+        action = "SCREENSHOT"
     
     if pinky_up and not index_up and not middle_up and not ring_up:
         if volume_control("down"):
@@ -213,7 +252,8 @@ def generate_frames():
             "VOLUME DOWN": (255,255,0), 
             "MUTE": (255,255,0),
             "MOVE": (0,255,0),
-            "LEFT CLICK": (0,255,0)
+            "LEFT CLICK": (0,255,0),
+            "SCREENSHOT": (255, 0, 255)
         }
         
         color = colors.get(display_action, (50,50,50))
@@ -254,6 +294,17 @@ def disable_control():
 @app.route('/get_action', methods=['GET'])
 def get_action():
     return jsonify({'action': current_action})
+
+@app.route('/get_screenshot_status', methods=['GET'])
+def get_screenshot_status():
+    global screenshot_hold_start
+    holding = False
+    progress = 0
+    if screenshot_hold_start is not None:
+        holding = True
+        elapsed = time.time() - screenshot_hold_start
+        progress = min(elapsed / screenshot_hold_duration, 1.0)
+    return jsonify({'holding': holding, 'progress': progress})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
